@@ -1,12 +1,6 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn import preprocessing
-from sklearn.metrics import roc_auc_score
-from sklearn.model_selection import StratifiedKFold
-from lightgbm import LGBMClassifier
-import time
 
 def feat(cl, inv):
     cl['client_catg'] = cl['client_catg'].astype('category')
@@ -44,7 +38,7 @@ def feat(cl, inv):
 def agg_feature(inv, cl, agg_stat):
     inv['invoice_date'] = pd.to_datetime(inv['invoice_date'], dayfirst=True)
     inv['delta_time'] = inv.sort_values(['client_id','invoice_date']).groupby('client_id')['invoice_date'].diff().dt.days.reset_index(drop=True)
-    # print([agg_stat['delta_time']])
+    print([agg_stat+['delta_time']])
     agg_trans = inv.groupby('client_id')[agg_stat+['delta_time']].agg(['mean','std','min','max'])
     agg_trans.columns = ['_'.join(col).strip() for col in agg_trans.columns.sort_values()]
     agg_trans.reset_index(inplace=True)
@@ -56,34 +50,34 @@ def agg_feature(inv, cl, agg_stat):
     cl = pd.merge(cl, weekday_avg, on='client_id', how='left')
     full_df = pd.merge(cl, agg_trans, on='client_id', how='left')
     full_df['invoice_per_cooperation'] = full_df['transactions_count'] / full_df['coop_time']
-    print(full_df.head())
+    # print(full_df.head())
     for col in agg_stat:
         full_df[col+'_range'] = full_df[col+'_max']-full_df[col+'_min']
         full_df[col+'_max_mean'] = full_df[col+'_max']/full_df[col+'_mean']
-
-    full_df = full_df.drop(['client_id'],axis=1,inplace=True)
-    full_df = full_df.drop(['creation_date'],axis=1,inplace=True)
+    full_df.drop(['client_id'],axis=1,inplace=True)
+    full_df.drop(['creation_date'],axis=1,inplace=True)
+    # print(full_df.head())
     print(f"num columns is {len(full_df.columns)}")
     return full_df
 
 if __name__ == '__main__':
-    # invoice_test = pd.read_csv('/content/drive/MyDrive/competitions/recog-r1/test_invoice.csv',
-    #                         low_memory=False)
-    # invoice_train = pd.read_csv('/content/drive/MyDrive/competitions/recog-r1/train_invoice.csv',
-    #                         low_memory=False)
-    # client_test = pd.read_csv('/content/drive/MyDrive/competitions/recog-r1/client_test.csv',
-    #                         low_memory=False)
-    # client_train = pd.read_csv('/content/drive/MyDrive/competitions/recog-r1/client_train.csv',
-    #                         low_memory=False)
-    # sample_submission = pd.read_csv('/content/drive/MyDrive/competitions/recog-r1/sample_submission.csv',
-    #                         low_memory=False)
-    # tr_cl, tr_inv = feat(client_train, invoice_train)
-    # ts_cl ,ts_inv = feat(client_test, invoice_test)
+    invoice_test = pd.read_csv('/content/drive/MyDrive/competitions/recog-r1/test_invoice.csv',
+                            low_memory=False)
+    invoice_train = pd.read_csv('/content/drive/MyDrive/competitions/recog-r1/train_invoice.csv',
+                            low_memory=False)
+    client_test = pd.read_csv('/content/drive/MyDrive/competitions/recog-r1/client_test.csv',
+                            low_memory=False)
+    client_train = pd.read_csv('/content/drive/MyDrive/competitions/recog-r1/client_train.csv',
+                            low_memory=False)
+    sample_submission = pd.read_csv('/content/drive/MyDrive/competitions/recog-r1/sample_submission.csv',
+                            low_memory=False)
+    tr_cl, tr_inv = feat(client_train, invoice_train)
+    ts_cl ,ts_inv = feat(client_test, invoice_test)
 
-    #tr_cl.to_csv('tr_cl.csv')
-    # tr_inv.to_csv('tr_inv.csv')
-    # ts_cl.to_csv('ts_cl.csv')
-    # ts_inv.to_csv('ts_inv.csv')
+    tr_cl.to_csv('tr_cl.csv')
+    tr_inv.to_csv('tr_inv.csv')
+    ts_cl.to_csv('ts_cl.csv')
+    ts_inv.to_csv('ts_inv.csv')
 
     tr_cl = pd.read_csv('/content/drive/MyDrive/competitions/recog-r1/tr_cl.csv')
     tr_inv = pd.read_csv('/content/drive/MyDrive/competitions/recog-r1/tr_inv.csv')
@@ -109,8 +103,15 @@ if __name__ == '__main__':
                         'delta_index'
                         ]
 
+    print('train')
     train_df = agg_feature(tr_inv,tr_cl,agg_stat_columns)
-    test_df = agg_feature(ts_inv,ts_cl,agg_feature)
+    print('test')
+    test_df = agg_feature(ts_inv,ts_cl,agg_stat_columns)
+
+    drop_col=['reading_remarque_max','counter_statue_min','counter_type_min','counter_type_max','counter_type_range',
+          'tarif_type_max', 'delta_index_min', 'consommation_level_4_mean']
+    train_df = train_df.drop(drop_col, axis=1)
+    test_df = test_df.drop(drop_col, axis=1)
 
     train_df.to_csv('/content/drive/MyDrive/competitions/recog-r1/train.csv')
     test_df.to_csv('/content/drive/MyDrive/competitions/recog-r1/test.csv')
